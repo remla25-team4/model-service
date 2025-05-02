@@ -1,0 +1,47 @@
+openapi: "3.0.3"
+info:
+  title: Model Service
+  version: "1.0.0"
+paths:
+  /predict:
+    post:
+      summary: Run model inference
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PredictRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PredictResponse"
+  /healthz:
+    get:
+      summary: Liveness probe
+      responses:
+        "200":
+          description: OK
+  /version:
+    get:
+      summary: Service version
+      responses:
+        "200":
+          description: OK
+components:
+  schemas:
+    PredictRequest:
+      type: object
+      properties:
+        text:
+          type: string
+      required: [text]
+    PredictResponse:
+      type: object
+      properties:
+        prediction:
+          type: string
+      required: [prediction]

@@ -1,0 +1,39 @@
+# model-service
+
+A lightweight FastAPI microservice that serves a trained ML model via REST.
+
+---
+
+## Run with Docker
+
+### 1. Build the image
+
+```bash
+docker build -t model-service .
+```
+
+### 2. Run the container
+
+```bash
+docker run -p 8080:8080   -e MODEL_URL=https://your-host.com/path/to/model.pkl   model-service
+```
+
+> Currently `MODEL_URL` does not really work. We use the default model from the repo.
+
+---
+
+## 🔍 Endpoints
+
+| Method | Endpoint     | Description        |
+|--------|--------------|--------------------|
+| GET    | `/healthz`   | Liveness check     |
+| GET    | `/version`   | Service version    |
+| POST   | `/predict`   | Run model inference|
+
+### 3. Interactive qurying
+
+If you want to query the app using an UI, please visit:
+
+```bash
+http://127.0.0.1:8080/docs
+```
