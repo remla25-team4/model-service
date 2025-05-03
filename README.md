@@ -15,10 +15,10 @@ docker build -t model-service .
 ### 2. Run the container
 
 ```bash
-docker run -p 8080:8080   -e MODEL_URL=https://your-host.com/path/to/model.pkl   model-service
+docker run -p 8080:8080 \
+  -e MODEL_URL="https://github.com/remla25-team4/model-training/raw/add_basic_model/models/naive_bayes.joblib" \
+  model-service
 ```
-
-> Currently `MODEL_URL` does not really work. We use the default model from the repo.
 
 ---
 
@@ -35,5 +35,5 @@ docker run -p 8080:8080   -e MODEL_URL=https://your-host.com/path/to/model.pkl  
 If you want to query the app using an UI, please visit:
 
 ```bash
-http://127.0.0.1:8080/docs
+http://0.0.0.0:8080/docs
 ```

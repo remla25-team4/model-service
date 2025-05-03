@@ -1,13 +1,15 @@
 import os
 import logging
-# import pickle
 from joblib import load
 import joblib
 import tempfile
 from pathlib import Path
 from typing import List
 
+import pickle
+
 import requests
+import urllib.request
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import numpy as np
@@ -20,7 +22,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 MODEL_URL = os.getenv("MODEL_URL")
 PORT = int(os.getenv("PORT", "8080"))
-MODEL_FILENAME = Path("model.pkl")
+MODEL_FILENAME = Path("model.joblib")
 
 app = FastAPI(
     title="Model Service",
@@ -28,28 +30,23 @@ app = FastAPI(
     description="REST API wrapper for the trained ML model.",
 )
 
-# def download_model(url: str, dest: Path) -> None:
-#     logger.info("Downloading model from %s …", url)
-#     response = requests.get(url, stream=True, timeout=30)
-#     response.raise_for_status()
-#     with tempfile.NamedTemporaryFile(delete=False) as tmp:
-#         for chunk in response.iter_content(chunk_size=8192):
-#             tmp.write(chunk)
-#     Path(tmp.name).replace(dest)
-#     logger.info("Model saved to %s", dest.absolute())
 
-# def load_model() -> object:
-#     if not MODEL_FILENAME.exists():
-#         if not MODEL_URL:
-#             raise RuntimeError("MODEL_URL env var is required when no local model is present")
-#         download_model(MODEL_URL, MODEL_FILENAME)
-#     with MODEL_FILENAME.open("rb") as f:
-#         model = joblib.load(f)
-#     logger.info("Model loaded (type=%s)", type(model))
-#     return model
+def download_model(url: str) -> None:
+    logger.info("Downloading model from %s …", url)
+    urllib.request.urlretrieve(url, "model.joblib")
+    logger.info("Model saved")
 
-# load on startup
-model = joblib.load('./app/naive_bayes.joblib')
+def load_model() -> object:
+    if not Path(MODEL_FILENAME).exists():
+        if not MODEL_URL:
+            raise RuntimeError("MODEL_URL env var is required when no local model is present")
+        download_model(MODEL_URL)
+    
+    model = joblib.load("model.joblib")
+    logger.info("Model loaded (type=%s)", type(model))
+    return model
+
+model = load_model()
 
 class PredictRequest(BaseModel):
     text: str
