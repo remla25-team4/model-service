@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ app/
 
 # Configurable at runtime
-ENV MODEL_URL="https://github.com/remla25-team4/model-training/blob/main/models/naive_bayes"
+ENV MODEL_URL=""
 ENV PORT=8080
 
 EXPOSE 8080
