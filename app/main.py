@@ -8,8 +8,6 @@ from typing import List
 
 import pickle
 from lib_ml.preprocessing import preprocess
-import nltk
-nltk.download('stopwords')
 
 import requests
 import urllib.request
