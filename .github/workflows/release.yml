@@ -53,7 +53,7 @@ jobs:
         git config --global user.email 'github-actions@github.com'
         git add app/__init__.py
         git commit -m "Update version to ${{ env.version }}"
-        git push
+        git push origin HEAD:api-integration
 
     - name: Build and push Docker image
       run: |
