@@ -54,7 +54,7 @@ jobs:
         git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
         git add app/__init__.py
         git commit -m "Update version to ${{ env.version }}"
-        git push origin HEAD:api-integration
+        git push origin HEAD:main
 
     - name: Build and push Docker image
       run: |
