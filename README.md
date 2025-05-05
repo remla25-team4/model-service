@@ -16,7 +16,7 @@ docker build -t model-service .
 
 ```bash
 docker run -p 8080:8080 \
-  -e MODEL_URL="https://github.com/remla25-team4/model-training/raw/add_basic_model/models/naive_bayes.joblib" \
+  -e MODEL_URL="https://github.com/remla25-team4/model-training/raw/main/models/naive_bayes.joblib" \
   model-service
 ```
 

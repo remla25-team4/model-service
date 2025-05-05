@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import List
 
 import pickle
-
+from lib_ml.preprocessing import preprocess
+import nltk
+nltk.download('stopwords')
 
 import requests
 import urllib.request
@@ -35,19 +37,21 @@ app = FastAPI(
 def download_model(url: str) -> None:
     logger.info("Downloading model from %s …", url)
     urllib.request.urlretrieve(url, "model.joblib")
+    urllib.request.urlretrieve(url.rsplit('/', 1)[0] + "/count_vectorizer.joblib", "count_vectorizer.joblib")
     logger.info("Model saved")
 
-def load_model() -> object:
+def load_models() -> object:
     if not Path(MODEL_FILENAME).exists():
         if not MODEL_URL:
             raise RuntimeError("MODEL_URL env var is required when no local model is present")
         download_model(MODEL_URL)
     
     model = joblib.load("model.joblib")
+    vectorizer = joblib.load("count_vectorizer.joblib")
     logger.info("Model loaded (type=%s)", type(model))
-    return model
+    return model, vectorizer
 
-model = load_model()
+model, vectorizer = load_models()
 
 class PredictRequest(BaseModel):
     text: str
@@ -66,9 +70,9 @@ async def version():
 @app.post("/predict", response_model=PredictResponse, summary="Run model inference")
 async def predict(req: PredictRequest):
     try:
-        # Convert list of strings to numpy array and reshape to 2D
-        # text_array = np.array(req.text).reshape(-1, 1)
-        text_array = np.random.randint(0, 5, size=(1, 140))
+
+        text_array = preprocess([req.text])
+        text_array = vectorizer.transform(text_array).toarray()
 
         pred = model.predict(text_array)
         pred = 'positive' if pred[0] == 1 else 'negative'
