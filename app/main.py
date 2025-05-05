@@ -8,6 +8,7 @@ from typing import List
 
 import pickle
 
+
 import requests
 import urllib.request
 from fastapi import FastAPI, HTTPException
