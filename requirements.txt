@@ -4,6 +4,5 @@ pydantic==2.7.1
 requests>=2.31.0
 joblib>=1.4.0
 scikit-learn>=1.4.0
-
-# Shared library published by us
-# lib-ml==1.0.0
+nltk>=3.8.1
+lib-ml @ git+https://github.com/remla25-team4/lib-ml.git@v0.1.0
