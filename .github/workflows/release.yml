@@ -45,17 +45,58 @@ jobs:
         echo "version_minor=$MINOR" >> $GITHUB_ENV
         echo "version_patch=$PATCH" >> $GITHUB_ENV
 
-    - name: Update version in __init__.py
+    - name: Update version in __init__.py and push to main
+      if: startsWith(github.ref, 'refs/tags/')
       run: |
-        # Update the version in __init__.py
-        sed -i "s/__version__ = \".*\"/__version__ = \"${{ env.version }}\"/" app/__init__.py
-        # Commit and push the version update
-        git config --global user.name 'GitHub Actions'
-        git config --global user.email 'github-actions@github.com'
-        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-        git add app/__init__.py
-        git commit -m "Update version to ${{ env.version }}"
-        git push origin HEAD:main
+        VERSION_TO_SET="${{ env.version }}" # Version derived from the tag
+        echo "Target version for main branch's app/__init__.py: $VERSION_TO_SET"
+
+        if [ -z "$VERSION_TO_SET" ]; then
+          echo "Error: Version from tag is not set. Skipping update to main."
+          exit 1
+        fi
+
+        echo "Configuring Git user..."
+        git config --global user.name 'GitHub Actions Bot'
+        git config --global user.email 'actions@github.com'
+        # Ensure GITHUB_TOKEN has push permissions (contents: write in job permissions)
+
+        echo "Fetching latest main branch from remote..."
+        git fetch origin main
+
+        echo "Checking out main branch (or creating it based on remote)..."
+        # Create a local main branch that tracks origin/main, or reset it if it exists
+        # This ensures we are working with the latest state of the main branch
+        git checkout -B main origin/main
+
+        # Now, on the main branch, update the __init__.py file
+        if [ ! -f app/__init__.py ]; then
+          echo "Error: app/__init__.py not found on the main branch."
+          # Consider if you want to create the file if it's missing, or just fail.
+          # For example, to create it:
+          # echo "__version__ = \"$VERSION_TO_SET\"" > app/__init__.py
+          # echo "Created app/__init__.py on main branch with version $VERSION_TO_SET."
+          exit 1 # Current behavior: exit if not found
+        fi
+
+        CURRENT_VERSION_IN_MAIN_INIT_PY=$(grep -oP '__version__ = "\K[^"]+' app/__init__.py || echo "not_found")
+        echo "Current version in app/__init__.py on main branch: $CURRENT_VERSION_IN_MAIN_INIT_PY"
+
+        if [ "$CURRENT_VERSION_IN_MAIN_INIT_PY" == "$VERSION_TO_SET" ]; then
+          echo "app/__init__.py on main branch is already at version $VERSION_TO_SET. No changes needed."
+        else
+          echo "Updating app/__init__.py on main branch to version $VERSION_TO_SET..."
+          sed -i "s/__version__ = \".*\"/__version__ = \"$VERSION_TO_SET\"/" app/__init__.py
+          echo "Updated app/__init__.py content on main branch:"
+          cat app/__init__.py
+
+          git add app/__init__.py
+          git commit -m "chore: Update version in app to $VERSION_TO_SET (triggered by tag ${{ github.ref_name }}) [skip ci]"
+
+          echo "Pushing updated version file to remote main branch..."
+          git push origin main
+          echo "Successfully pushed version update to main branch."
+        fi
 
     - name: Build and push Docker image
       run: |
@@ -68,3 +109,22 @@ jobs:
           --tag $IMG:latest \
           .
         docker push --all-tags $IMG 
+
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.VERSION_TAG_NAME }}
+        name: Release ${{ env.VERSION_TAG_NAME }}
+        body: |
+          Automated release for version ${{ env.VERSION_TAG_NAME }}.
+
+          Docker images have been pushed to `ghcr.io/${{ env.IMG_LOWERCASE }}` (replace with actual lowercase repo) with tags:
+          - `${{ env.version }}`
+          - `${{ env.version_major }}.${{ env.version_minor }}.latest`
+          - `${{ env.version_major }}.latest`
+          - `latest`
+
+          *Note: The version in `app/__init__.py` on the `main` branch has been updated to `${{ env.version }}` by this workflow.*
+        draft: false
+        prerelease: false
