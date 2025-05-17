@@ -1,12 +1,11 @@
-name: Release
+name: Release Model Service
 
 on:
   push:
-    branches: [main]
-    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"] # Trigger on tags like v1.0.0, v0.2.3, etc.
 
 jobs:
-  build:
+  build_and_release:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -14,7 +13,16 @@ jobs:
       id-token: write
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -25,9 +33,19 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        # Assuming requirements.txt is at the root of model-service repository
+        # or in a 'model-service/' subdirectory if this workflow is in a mono-repo.
+        # Adjust path if necessary.
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        elif [ -f model-service/requirements.txt ]; then
+          pip install -r model-service/requirements.txt
+        else
+          echo "Warning: requirements.txt not found. Skipping pip install."
+        fi
 
-    - uses: docker/login-action@v3
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
@@ -35,8 +53,8 @@ jobs:
 
     - name: Parse version info from tag
       run: |
-        # GITHUB_REF is like refs/tags/v2.3.5, so strip the first 11 chars
-        VERSION=${GITHUB_REF:11}
+        RAW_VERSION=${{ github.ref_name }}
+        VERSION=${RAW_VERSION#v} 
         MAJOR=$(echo "$VERSION" | cut -d . -f 1)
         MINOR=$(echo "$VERSION" | cut -d . -f 2)
         PATCH=$(echo "$VERSION" | cut -d . -f 3)
@@ -45,81 +63,68 @@ jobs:
         echo "version_minor=$MINOR" >> $GITHUB_ENV
         echo "version_patch=$PATCH" >> $GITHUB_ENV
 
-    - name: Update version in __init__.py and push to main
+    - name: Update version in model-service/__init__.py and push to main
       if: startsWith(github.ref, 'refs/tags/')
       run: |
-        VERSION_TO_SET="${{ env.version }}" # Version derived from the tag
-        echo "Target version for main branch's app/__init__.py: $VERSION_TO_SET"
+        VERSION_TO_SET="${{ env.version }}"
+        INIT_PY_PATH="model-service/__init__.py" # Path for model-service
 
-        if [ -z "$VERSION_TO_SET" ]; then
-          echo "Error: Version from tag is not set. Skipping update to main."
-          exit 1
-        fi
-
-        echo "Configuring Git user..."
         git config --global user.name 'GitHub Actions Bot'
-        git config --global user.email 'actions@github.com'
-        # Ensure GITHUB_TOKEN has push permissions (contents: write in job permissions)
-
-        echo "Fetching latest main branch from remote..."
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
         git fetch origin main
-
-        echo "Checking out main branch (or creating it based on remote)..."
-        # Create a local main branch that tracks origin/main, or reset it if it exists
-        # This ensures we are working with the latest state of the main branch
         git checkout -B main origin/main
 
-        # Now, on the main branch, update the __init__.py file
-        if [ ! -f app/__init__.py ]; then
-          echo "Error: app/__init__.py not found on the main branch."
-          # Consider if you want to create the file if it's missing, or just fail.
-          # For example, to create it:
-          # echo "__version__ = \"$VERSION_TO_SET\"" > app/__init__.py
-          # echo "Created app/__init__.py on main branch with version $VERSION_TO_SET."
-          exit 1 # Current behavior: exit if not found
+        mkdir -p "$(dirname "$INIT_PY_PATH")"
+        if [ ! -f "$INIT_PY_PATH" ]; then
+          echo "__version__ = \"$VERSION_TO_SET\"" > "$INIT_PY_PATH"
         fi
 
-        CURRENT_VERSION_IN_MAIN_INIT_PY=$(grep -oP '__version__ = "\K[^"]+' app/__init__.py || echo "not_found")
-        echo "Current version in app/__init__.py on main branch: $CURRENT_VERSION_IN_MAIN_INIT_PY"
-
-        if [ "$CURRENT_VERSION_IN_MAIN_INIT_PY" == "$VERSION_TO_SET" ]; then
-          echo "app/__init__.py on main branch is already at version $VERSION_TO_SET. No changes needed."
+        if grep -q "__version__ = " "$INIT_PY_PATH"; then
+          CURRENT_VERSION_IN_MAIN_INIT_PY=$(grep -oP '__version__ = "\K[^"]+' "$INIT_PY_PATH" || echo "not_found")
+          if [ "$CURRENT_VERSION_IN_MAIN_INIT_PY" != "$VERSION_TO_SET" ]; then
+            sed -i "s|__version__ = \".*\"|__version__ = \"$VERSION_TO_SET\"|" "$INIT_PY_PATH"
+          fi
         else
-          echo "Updating app/__init__.py on main branch to version $VERSION_TO_SET..."
-          sed -i "s/__version__ = \".*\"/__version__ = \"$VERSION_TO_SET\"/" app/__init__.py
-          echo "Updated app/__init__.py content on main branch:"
-          cat app/__init__.py
-
-          git add app/__init__.py
-          git commit -m "chore: Update version in app to $VERSION_TO_SET (triggered by tag ${{ github.ref_name }}) [skip ci]"
-
-          echo "Pushing updated version file to remote main branch..."
+          echo "__version__ = \"$VERSION_TO_SET\"" >> "$INIT_PY_PATH"
+        fi
+        
+        if git diff --quiet "$INIT_PY_PATH"; then
+          echo "No version changes to commit for $INIT_PY_PATH."
+        else
+          git add "$INIT_PY_PATH"
+          git commit -m "chore(model-service): Update version to $VERSION_TO_SET (triggered by tag ${{ github.ref_name }}) [skip ci]"
           git push origin main
-          echo "Successfully pushed version update to main branch."
         fi
 
-    - name: Build and push Docker image
+    - name: Build and push Docker image (multi-arch) for model-service
       run: |
-        IMG="ghcr.io/${{github.repository}}"
-        IMG=${IMG@L} # lower case the image
-        docker build \
-          --tag $IMG:${{ env.version }} \
-          --tag $IMG:${{ env.version_major }}.${{ env.version_minor }}.latest \
-          --tag $IMG:${{ env.version_major }}.latest \
-          --tag $IMG:latest \
-          .
-        docker push --all-tags $IMG 
+        # Assumes this workflow is in the 'model-service' repository, 
+        # so github.event.repository.name will be 'model-service'.
+        IMAGE_NAME="${{ github.event.repository.name }}" 
+        IMG_BASE_LOWER="ghcr.io/${{ github.repository_owner }}/${IMAGE_NAME,,}"
+        echo "IMAGE_URL_FOR_RELEASE_NOTES=${IMG_BASE_LOWER}" >> $GITHUB_ENV # For use in release notes
+
+        docker buildx build --platform linux/amd64,linux/arm64 \
+          -t $IMG_BASE_LOWER:${{ env.version }} \
+          -t $IMG_BASE_LOWER:${{ env.version_major }}.${{ env.version_minor }}.latest \
+          -t $IMG_BASE_LOWER:${{ env.version_major }}.latest \
+          -t $IMG_BASE_LOWER:latest \
+          --push \
+          . # Assumes Dockerfile is at the root of the model-service repository
 
     - name: Create GitHub Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ env.VERSION_TAG_NAME }}
-        name: Release ${{ env.VERSION_TAG_NAME }}
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }} (model-service)
         body: |
-          Automated release for version ${{ env.VERSION_TAG_NAME }}.
+          Automated release for model-service version ${{ github.ref_name }}.
 
-          Docker images have been pushed to `ghcr.io/${{ env.IMG_LOWERCASE }}` (replace with actual lowercase repo) with tags:
+          **Important Note:**
+          - Model-service images now support multi-architecture builds for **linux/arm64** and **linux/amd64**.
+
+          Docker images have been pushed to `${{ env.IMAGE_URL_FOR_RELEASE_NOTES }}` with tags:
           - `${{ env.version }}`
           - `${{ env.version_major }}.${{ env.version_minor }}.latest`
           - `${{ env.version_major }}.latest`
