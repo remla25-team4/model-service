@@ -11,8 +11,8 @@ from lib_ml.preprocessing import preprocess
 
 import requests
 import urllib.request
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from flask import Flask
+from flask_restx import Api, Resource, fields
 import numpy as np
 
 # from lib_ml import preprocess_text 
@@ -25,12 +25,28 @@ MODEL_URL = os.getenv("MODEL_URL")
 PORT = int(os.getenv("PORT", "8080"))
 MODEL_FILENAME = Path("model.joblib")
 
-app = FastAPI(
-    title="Model Service",
+app = Flask(__name__)
+api = Api(
+    app,
     version=__version__,
+    title="Model Service",
     description="REST API wrapper for the trained ML model.",
+    doc="/docs"
 )
 
+ns = api.namespace('', description='Model Service operations')
+
+predict_request = api.model('PredictRequest', {
+    'text': fields.String(required=True, description='Text to analyze')
+})
+
+predict_response = api.model('PredictResponse', {
+    'prediction': fields.String(description='Prediction result (positive/negative)')
+})
+
+error_response = api.model('ErrorResponse', {
+    'error': fields.String(description='Error message')
+})
 
 def download_model(url: str) -> None:
     logger.info("Downloading model from %s …", url)
@@ -51,31 +67,46 @@ def load_models() -> object:
 
 model, vectorizer = load_models()
 
-class PredictRequest(BaseModel):
-    text: str
+@ns.route('/healthz')
+class HealthCheck(Resource):
+    @ns.doc('health_check')
+    @ns.response(200, 'OK')
+    def get(self):
+        """Health check endpoint"""
+        return {"status": "ok"}
 
-class PredictResponse(BaseModel):
-    prediction: str
+@ns.route('/version')
+class Version(Resource):
+    @ns.doc('get_version')
+    @ns.response(200, 'OK')
+    def get(self):
+        """Get service version"""
+        return {"version": __version__}
 
-@app.get("/healthz", summary="Liveness probe")
-async def healthz():
-    return {"status": "ok"}
+@ns.route('/predict')
+class Predict(Resource):
+    @ns.doc('predict')
+    @ns.expect(predict_request)
+    @ns.response(200, 'Success', predict_response)
+    @ns.response(400, 'Bad Request', error_response)
+    @ns.response(500, 'Internal Server Error', error_response)
+    def post(self):
+        """Run model inference"""
+        try:
+            data = api.payload
+            if not data or "text" not in data:
+                return {"error": "Missing 'text' field in request"}, 400
 
-@app.get("/version", summary="Service version")
-async def version():
-    return {"version": __version__}
+            text_array = preprocess([data["text"]])
+            text_array = vectorizer.transform(text_array).toarray()
 
-@app.post("/predict", response_model=PredictResponse, summary="Run model inference")
-async def predict(req: PredictRequest):
-    try:
+            pred = model.predict(text_array)
+            pred = 'positive' if pred[0] == 1 else 'negative'
+            return {"prediction": pred}
 
-        text_array = preprocess([req.text])
-        text_array = vectorizer.transform(text_array).toarray()
+        except Exception as exc:
+            logger.exception("Inference failed")
+            return {"error": str(exc)}, 500
 
-        pred = model.predict(text_array)
-        pred = 'positive' if pred[0] == 1 else 'negative'
-        return PredictResponse(prediction=pred)
-
-    except Exception as exc:
-        logger.exception("Inference failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=PORT)
