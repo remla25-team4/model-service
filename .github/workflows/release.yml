@@ -3,7 +3,7 @@ name: Release Model Service
 on:
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+" # Trigger on tags like v1.0.0, v0.2.3
+      - "v[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
   build_and_release:
@@ -34,8 +34,6 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        # Assuming requirements.txt is at the root of the model-service repository.
-        # Adjust path if this workflow is in a mono-repo and model-service is in a sub-directory.
         if [ -f requirements.txt ]; then
           pip install -r requirements.txt
         else
@@ -68,7 +66,7 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        INIT_PY_PATH="app/__init__.py" # Path to the __init__.py for model-service
+        INIT_PY_PATH="app/__init__.py"
         VERSION_TO_SET="${{ env.VERSION }}"
 
         echo "Configuring Git user..."
@@ -77,7 +75,7 @@ jobs:
 
         echo "Checking out main branch..."
         git fetch origin main
-        git checkout main # Checkout the main branch to make changes
+        git checkout main
 
         # Ensure directory exists and create/update __init__.py
         mkdir -p "$(dirname "$INIT_PY_PATH")"
@@ -107,8 +105,6 @@ jobs:
 
     - name: Build and push Docker image (multi-arch) for model-service
       run: |
-        # Assumes this workflow is in the 'model-service' repository.
-        # github.repository is <owner>/<repo_name>
         IMAGE_REPO_NAME_LOWER=$(echo "${{ github.repository }}" | cut -d'/' -f2 | tr '[:upper:]' '[:lower:]')
         IMAGE_OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
         
@@ -127,7 +123,6 @@ jobs:
           -t "${IMG_BASE_URL}:${{ env.VERSION_MAJOR }}.latest" \
           -t "${IMG_BASE_URL}:latest" \
           --push \
-          . # Assumes Dockerfile is at the root of the model-service repository
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
