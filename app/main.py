@@ -105,7 +105,7 @@ class Predict(Resource):
             return {"prediction": pred}
 
         except Exception as exc:
-            logger.exception("Inference failed")
+            logger.exception("Prediction failed")
             return {"error": str(exc)}, 500
 
 if __name__ == "__main__":
