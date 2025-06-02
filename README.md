@@ -4,7 +4,7 @@ A lightweight FastAPI microservice that serves a trained ML model via REST.
 
 ---
 
-## Run with Docker
+## Build and Run Docker
 
 ### 1. Build the image
 
@@ -19,8 +19,27 @@ docker run -p 8080:8080 \
   -e MODEL_URL="https://github.com/remla25-team4/model-training/raw/main/models/naive_bayes.joblib" \
   model-service
 ```
-
 ---
+
+## Run Pre-built Image from GHCR
+
+### 1. Pull the image
+
+```bash
+docker pull ghcr.io/remla25-team4/model-service:1.0.0
+```
+
+### 2. Run the container
+
+```bash
+docker run -p 8080:8080 \
+  -e MODEL_URL="[https://github.com/remla25-team4/model-training/raw/main/models/naive_bayes.joblib](https://github.com/remla25-team4/model-training/raw/main/models/naive_bayes.joblib)" \
+  ghcr.io/remla25-team4/model-service:1.0.0
+```
+
+### 3. Access the service
+
+Once the container is running, you can access the service endpoints at http://localhost:8080.
 
 ## 🔍 Endpoints
 
