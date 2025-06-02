@@ -63,105 +63,38 @@ jobs:
         echo "version_minor=$MINOR" >> $GITHUB_ENV
         echo "version_patch=$PATCH" >> $GITHUB_ENV
 
-#    - name: Update version in model-service/__init__.py and push to main
-#      if: startsWith(github.ref, 'refs/tags/')
-#      run: |
-#        VERSION_TO_SET="${{ env.version }}"
-#        INIT_PY_PATH="model-service/app/__init__.py" # Path for model-service
-#
-#        git config --global user.name 'GitHub Actions Bot'
-#        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-#        git fetch origin main
-#        git checkout -B main origin/main
-#
-#        mkdir -p "$(dirname "$INIT_PY_PATH")"
-#        if [ ! -f "$INIT_PY_PATH" ]; then
-#          echo "__version__ = \"$VERSION_TO_SET\"" > "$INIT_PY_PATH"
-#        fi
-#
-#        if grep -q "__version__ = " "$INIT_PY_PATH"; then
-#          CURRENT_VERSION_IN_MAIN_INIT_PY=$(grep -oP '__version__ = "\K[^"]+' "$INIT_PY_PATH" || echo "not_found")
-#          if [ "$CURRENT_VERSION_IN_MAIN_INIT_PY" != "$VERSION_TO_SET" ]; then
-#            sed -i "s|__version__ = \".*\"|__version__ = \"$VERSION_TO_SET\"|" "$INIT_PY_PATH"
-#          fi
-#        else
-#          echo "__version__ = \"$VERSION_TO_SET\"" >> "$INIT_PY_PATH"
-#        fi
-#
-#        if git diff --quiet "$INIT_PY_PATH"; then
-#          echo "No version changes to commit for $INIT_PY_PATH."
-#        else
-#          git add "$INIT_PY_PATH"
-#          git commit -m "chore(model-service): Update version to $VERSION_TO_SET (triggered by tag ${{ github.ref_name }}) [skip ci]"
-#          git push origin main
-#        fi
-
-    - name: Update version in model-service/__init__.py and push to main (DEBUGGING)
+    - name: Update version in model-service/__init__.py and push to main
       if: startsWith(github.ref, 'refs/tags/')
       run: |
         VERSION_TO_SET="${{ env.version }}"
-        INIT_PY_PATH="model-service/__init__.py" # Ensure this path is 100% correct
-        
-        echo "--- DEBUG INFO ---"
-        echo "Target version to set: $VERSION_TO_SET"
-        echo "Target file path: $INIT_PY_PATH"
-        
+        INIT_PY_PATH="app/__init__.py" # Path for model-service
+
         git config --global user.name 'GitHub Actions Bot'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
         git fetch origin main
         git checkout -B main origin/main
-        
-        # --- BEFORE MODIFICATION ---
-        echo "--- Before modification attempt ---"
-        if [ -f "$INIT_PY_PATH" ]; then
-          echo "File exists. Content of $INIT_PY_PATH:"
-          cat "$INIT_PY_PATH" | sed -n l # Use 'sed -n l' to show non-printable characters
-        else
-          echo "File DOES NOT exist at $INIT_PY_PATH before modification."
-        fi
-        echo "-----------------------------------"
-        
+
         mkdir -p "$(dirname "$INIT_PY_PATH")"
         if [ ! -f "$INIT_PY_PATH" ]; then
           echo "__version__ = \"$VERSION_TO_SET\"" > "$INIT_PY_PATH"
-          echo "DEBUG: File was missing, created and initialized."
         fi
-        
+
         if grep -q "__version__ = " "$INIT_PY_PATH"; then
           CURRENT_VERSION_IN_MAIN_INIT_PY=$(grep -oP '__version__ = "\K[^"]+' "$INIT_PY_PATH" || echo "not_found")
-          echo "DEBUG: Current version extracted by grep: '$CURRENT_VERSION_IN_MAIN_INIT_PY'"
-          echo "DEBUG: Comparing '$CURRENT_VERSION_IN_MAIN_INIT_PY' with '$VERSION_TO_SET'"
-        
           if [ "$CURRENT_VERSION_IN_MAIN_INIT_PY" != "$VERSION_TO_SET" ]; then
-            echo "DEBUG: Versions are different. Attempting sed replacement..."
             sed -i "s|__version__ = \".*\"|__version__ = \"$VERSION_TO_SET\"|" "$INIT_PY_PATH"
-            echo "DEBUG: sed command executed."
-          else
-            echo "DEBUG: Current version is already the target version. No sed needed."
           fi
         else
           echo "__version__ = \"$VERSION_TO_SET\"" >> "$INIT_PY_PATH"
-          echo "DEBUG: '__version__ = ' line not found, appended it."
         fi
-        
-        # --- AFTER MODIFICATION ---
-        echo "--- After modification attempt ---"
-        echo "Content of $INIT_PY_PATH now:"
-        cat "$INIT_PY_PATH" | sed -n l # Use 'sed -n l' to show non-printable characters
-        echo "-----------------------------------"
-        
-        # --- GIT DIFF CHECK ---
-        echo "--- Git diff check ---"
+
         if git diff --quiet "$INIT_PY_PATH"; then
           echo "No version changes to commit for $INIT_PY_PATH."
         else
-          echo "CHANGES DETECTED for $INIT_PY_PATH. Proceeding with commit and push."
           git add "$INIT_PY_PATH"
           git commit -m "chore(model-service): Update version to $VERSION_TO_SET (triggered by tag ${{ github.ref_name }}) [skip ci]"
           git push origin main
-          echo "Commit and push command executed."
         fi
-        echo "--- END DEBUG INFO ---"
 
     - name: Build and push Docker image (multi-arch) for model-service
       run: |
