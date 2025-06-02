@@ -67,7 +67,7 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/')
       run: |
         VERSION_TO_SET="${{ env.version }}"
-        INIT_PY_PATH="model-service/app/__init__.py" # Path for model-service
+        INIT_PY_PATH="app/__init__.py" # Path for model-service
 
         git config --global user.name 'GitHub Actions Bot'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
@@ -87,7 +87,7 @@ jobs:
         else
           echo "__version__ = \"$VERSION_TO_SET\"" >> "$INIT_PY_PATH"
         fi
-        
+
         if git diff --quiet "$INIT_PY_PATH"; then
           echo "No version changes to commit for $INIT_PY_PATH."
         else
