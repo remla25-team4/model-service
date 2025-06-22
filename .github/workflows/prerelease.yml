@@ -1,0 +1,139 @@
+name: Pre-release Model Service
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+jobs:
+  build_and_prerelease:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Determine trigger type
+        id: trigger
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "triggered_by=tag" >> $GITHUB_OUTPUT
+          else
+            echo "triggered_by=branch" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get latest tag from history
+        if: steps.trigger.outputs.triggered_by == 'branch'
+        run: |
+          LATEST=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "LATEST_TAG=$LATEST" >> $GITHUB_ENV
+
+      - name: Get latest tag from pushed tag
+        if: steps.trigger.outputs.triggered_by == 'tag'
+        run: |
+          echo "LATEST_TAG=${{ github.ref_name }}" >> $GITHUB_ENV
+
+      - name: Calculate pre-release version
+        run: |
+          # strip leading "v" and any "-pre" suffix
+          BASE=${LATEST_TAG#v}
+          BASE=${BASE%%-pre*}
+          IFS=. read MAJOR MINOR PATCH <<< "$BASE"
+
+          # bump patch only if we just pushed a stable tag
+          if [[ "${{ steps.trigger.outputs.triggered_by }}" == "tag" ]]; then
+            PATCH=$((PATCH + 1))
+          fi
+
+          TS=$(date +%Y%m%d.%H%M%S)
+          PRERELEASE="$MAJOR.$MINOR.$PATCH-pre.$TS"
+
+          echo "VERSION=$PRERELEASE"       >> $GITHUB_ENV
+          echo "VERSION_MAJOR=$MAJOR"      >> $GITHUB_ENV
+          echo "VERSION_MINOR=$MINOR"      >> $GITHUB_ENV
+          echo "VERSION_PATCH=$PATCH"      >> $GITHUB_ENV
+
+      - name: Update version in app/__init__.py and push to main
+        if: steps.trigger.outputs.triggered_by == 'branch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          INIT="app/__init__.py"
+          VER="${{ env.VERSION }}"
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+          mkdir -p "$(dirname "$INIT")"
+          if ! grep -q "__version__ =" "$INIT"; then
+            echo "__version__ = \"$VER\"" > "$INIT"
+          else
+            sed -i "s|__version__ = \".*\"|__version__ = \"$VER\"|" "$INIT"
+          fi
+          if ! git diff --quiet "$INIT"; then
+            git add "$INIT"
+            git commit -m "chore: bump to prerelease $VER [skip ci]"
+            git push https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }} main
+          fi
+
+      - name: Tag pre-release commit
+        if: steps.trigger.outputs.triggered_by == 'branch'
+        run: |
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          SHA=$(git rev-parse origin/main)
+          git tag "v${{ env.VERSION }}" $SHA
+          git push origin "v${{ env.VERSION }}"
+
+      - name: Build & push Docker image (multi-arch)
+        run: |
+          REPO=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2 | tr '[:upper:]' '[:lower:]')
+          IMG="ghcr.io/${REPO}/${NAME}"
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t "${IMG}:v${{ env.VERSION }}" \
+            --push .
+
+      - name: Create GitHub Pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ env.VERSION }}"
+          name: Pre-release v${{ env.VERSION }} (model-service)
+          body: |
+            Automated **pre-release** for model-service version **v${{ env.VERSION }}**.
+          draft: false
+          prerelease: true
