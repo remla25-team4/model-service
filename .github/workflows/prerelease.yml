@@ -72,46 +72,19 @@ jobs:
 
       - name: Calculate pre-release version
         run: |
-          # strip leading "v" and any "-pre" suffix
           BASE=${LATEST_TAG#v}
           BASE=${BASE%%-pre*}
           IFS=. read MAJOR MINOR PATCH <<< "$BASE"
 
-          # bump patch only if we just pushed a stable tag
-          if [[ "${{ steps.trigger.outputs.triggered_by }}" == "tag" ]]; then
-            PATCH=$((PATCH + 1))
-          fi
-
+          # always bump patch
+          PATCH=$((PATCH + 1))
           TS=$(date +%Y%m%d.%H%M%S)
-          PRERELEASE="$MAJOR.$MINOR.$PATCH-pre.$TS"
+          PRE="$MAJOR.$MINOR.$PATCH-pre.$TS"
 
-          echo "VERSION=$PRERELEASE"       >> $GITHUB_ENV
-          echo "VERSION_MAJOR=$MAJOR"      >> $GITHUB_ENV
-          echo "VERSION_MINOR=$MINOR"      >> $GITHUB_ENV
-          echo "VERSION_PATCH=$PATCH"      >> $GITHUB_ENV
-
-      - name: Update version in app/__init__.py and push to main
-        if: steps.trigger.outputs.triggered_by == 'branch'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          INIT="app/__init__.py"
-          VER="${{ env.VERSION }}"
-          git config --global user.name  "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git checkout main
-          mkdir -p "$(dirname "$INIT")"
-          if ! grep -q "__version__ =" "$INIT"; then
-            echo "__version__ = \"$VER\"" > "$INIT"
-          else
-            sed -i "s|__version__ = \".*\"|__version__ = \"$VER\"|" "$INIT"
-          fi
-          if ! git diff --quiet "$INIT"; then
-            git add "$INIT"
-            git commit -m "chore: bump to prerelease $VER [skip ci]"
-            git push https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }} main
-          fi
+          echo "VERSION=$PRE"           >> $GITHUB_ENV
+          echo "VERSION_MAJOR=$MAJOR"   >> $GITHUB_ENV
+          echo "VERSION_MINOR=$MINOR"   >> $GITHUB_ENV
+          echo "VERSION_PATCH=$PATCH"   >> $GITHUB_ENV
 
       - name: Tag pre-release commit
         if: steps.trigger.outputs.triggered_by == 'branch'
@@ -139,6 +112,6 @@ jobs:
           tag_name: "v${{ env.VERSION }}"
           name: Pre-release v${{ env.VERSION }} (model-service)
           body: |
-            **Pre-release** for model-service version **v${{ env.VERSION }}**.
+            Automated **pre-release** for model-service version **v${{ env.VERSION }}**.
           draft: false
           prerelease: true
