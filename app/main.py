@@ -23,6 +23,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 MODEL_URL = os.getenv("MODEL_URL")
 CV_URL = os.getenv("CV_URL")
+HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8080"))
 MODEL_FILENAME = Path("model.joblib")
 
@@ -113,4 +114,4 @@ class Predict(Resource):
             return {"error": str(exc)}, 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=PORT)
+    app.run(host=HOST, port=PORT)

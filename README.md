@@ -18,6 +18,8 @@ docker build -t model-service .
 docker run -p 8080:8080 \
   -e MODEL_URL="https://github.com/remla25-team4/model-training/releases/download/v1.0.5/naive_bayes.joblib" \
   -e CV_URL="https://github.com/remla25-team4/model-training/releases/download/v1.0.5/count_vectorizer.joblib" \
+  -e HOST=0.0.0.0 \
+  -e PORT=8080 \
   model-service
 ```
 ---
