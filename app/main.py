@@ -22,6 +22,7 @@ logger = logging.getLogger("model-service")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 MODEL_URL = os.getenv("MODEL_URL")
+CV_URL = os.getenv("CV_URL")
 PORT = int(os.getenv("PORT", "8080"))
 MODEL_FILENAME = Path("model.joblib")
 
@@ -48,21 +49,24 @@ error_response = api.model('ErrorResponse', {
     'error': fields.String(description='Error message')
 })
 
-def download_model(url: str) -> None:
+def download_model(url: str, cv_url: str) -> None:
     logger.info("Downloading model from %s …", url)
     urllib.request.urlretrieve(url, "model.joblib")
-    urllib.request.urlretrieve(url.rsplit('/', 1)[0] + "/count_vectorizer.joblib", "count_vectorizer.joblib")
-    logger.info("Model saved")
+    logger.info("Model downloaded")
+    logger.info("Downloading count vectorizer from %s …", cv_url)
+    urllib.request.urlretrieve(cv_url, "count_vectorizer.joblib")
+    logger.info("Count vectorizer downloaded")
 
 def load_models() -> object:
     if not Path(MODEL_FILENAME).exists():
-        if not MODEL_URL:
-            raise RuntimeError("MODEL_URL env var is required when no local model is present")
-        download_model(MODEL_URL)
+        if not MODEL_URL or not CV_URL:
+            raise RuntimeError("MODEL_URL and CV_URL env vars are required when no local model is present")
+        download_model(MODEL_URL, CV_URL)
     
     model = joblib.load("model.joblib")
     vectorizer = joblib.load("count_vectorizer.joblib")
     logger.info("Model loaded (type=%s)", type(model))
+    logger.info("Vectorizer loaded (type=%s)", type(vectorizer))
     return model, vectorizer
 
 model, vectorizer = load_models()

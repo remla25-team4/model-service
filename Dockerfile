@@ -18,6 +18,7 @@ COPY app/ app/
 
 # Configurable at runtime
 ENV MODEL_URL=""
+ENV CV_URL=""
 ENV PORT=8080
 
 EXPOSE 8080
