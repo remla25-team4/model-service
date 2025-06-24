@@ -14,33 +14,13 @@ jobs:
       id-token: write
 
     steps:
-    - name: Checkout code
+    - name: Checkout tagged code
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
-
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then
-          pip install -r requirements.txt
-        else
-          echo "Error: requirements.txt not found at the expected location. Please ensure it exists."
-          exit 1
-        fi
-
     - name: Login to GitHub Container Registry
       uses: docker/login-action@v3
       with:
@@ -62,46 +42,13 @@ jobs:
         echo "VERSION_PATCH=$PATCH" >> $GITHUB_ENV
         echo "Parsed version: $VERSION (Major: $MAJOR, Minor: $MINOR, Patch: $PATCH)"
 
-    - name: Update version in app/__init__.py and push to main
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - name: Update version in app/__init__.py for the build
       run: |
         INIT_PY_PATH="app/__init__.py"
-        VERSION_TO_SET="${{ env.VERSION }}"
-
-        echo "Configuring Git user..."
-        git config --global user.name 'github-actions[bot]'
-        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-
-        echo "Checking out main branch..."
-        git fetch origin main
-        git checkout main
-
-        # Ensure directory exists and create/update __init__.py
+        echo "Temporarily setting version for the Docker build..."
         mkdir -p "$(dirname "$INIT_PY_PATH")"
-        if [ ! -f "$INIT_PY_PATH" ] || ! grep -q "__version__ = " "$INIT_PY_PATH"; then
-          echo "Creating/Initializing $INIT_PY_PATH with version $VERSION_TO_SET"
-          echo "__version__ = \"$VERSION_TO_SET\"" > "$INIT_PY_PATH"
-        else
-          CURRENT_VERSION_IN_INIT_PY=$(grep -oP '__version__ = "\K[^"]+' "$INIT_PY_PATH")
-          if [ "$CURRENT_VERSION_IN_INIT_PY" != "$VERSION_TO_SET" ]; then
-            echo "Updating version in $INIT_PY_PATH from $CURRENT_VERSION_IN_INIT_PY to $VERSION_TO_SET"
-            sed -i "s|__version__ = \".*\"|__version__ = \"$VERSION_TO_SET\"|" "$INIT_PY_PATH"
-          else
-            echo "Version in $INIT_PY_PATH is already $VERSION_TO_SET. No update needed."
-          fi
-        fi
-
-        # Check for changes and commit/push if any
-        if git diff --quiet "$INIT_PY_PATH"; then
-          echo "No version changes to commit for $INIT_PY_PATH."
-        else
-          echo "Committing and pushing version update for $INIT_PY_PATH..."
-          git add "$INIT_PY_PATH"
-          git commit -m "chore(model-service): Update version to $VERSION_TO_SET (triggered by tag ${{ github.ref_name }}) [skip ci]"
-          # Use GH_TOKEN for push authentication if pushing to a protected branch or outside of typical actor permissions
-          git push https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git main
-        fi
+        echo "__version__ = \"${{ env.VERSION }}\"" > "$INIT_PY_PATH"
+        cat "$INIT_PY_PATH" # Log the content for verification
 
     - name: Build and push Docker image (multi-arch) for model-service
       run: |
@@ -111,16 +58,9 @@ jobs:
         IMG_BASE_URL="ghcr.io/${IMAGE_OWNER_LOWER}/${IMAGE_REPO_NAME_LOWER}"
         echo "IMAGE_URL_FOR_RELEASE_NOTES=${IMG_BASE_URL}" >> $GITHUB_ENV
 
-        echo "Building and pushing Docker images to ${IMG_BASE_URL} with tags:"
-        echo "  - ${{ env.VERSION }}"
-        echo "  - ${{ env.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}.latest"
-        echo "  - ${{ env.VERSION_MAJOR }}.latest"
-        echo "  - latest"
-
+        echo "Building and pushing Docker images from the tagged commit..."
         docker buildx build --platform linux/amd64,linux/arm64 \
           -t "${IMG_BASE_URL}:${{ env.VERSION }}" \
-          -t "${IMG_BASE_URL}:${{ env.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}.latest" \
-          -t "${IMG_BASE_URL}:${{ env.VERSION_MAJOR }}.latest" \
           -t "${IMG_BASE_URL}:latest" \
           --push \
           .
@@ -134,15 +74,42 @@ jobs:
           Automated release for model-service version **${{ github.ref_name }}**.
 
           **Key Points:**
-          - Multi-architecture Docker images built for `linux/amd64` and `linux/arm64`.
-          - The version in `app/__init__.py` on the `main` branch has been updated to `${{ env.VERSION }}`.
+          - Docker images were built from the code in this specific tag (`${{ github.sha }}`).
+          - Multi-architecture images built for `linux/amd64` and `linux/arm64`.
 
           **Docker Image:**
           Pushed to: `${{ env.IMAGE_URL_FOR_RELEASE_NOTES }}`
           Available tags:
           - `${{ env.VERSION }}`
-          - `${{ env.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}.latest`
-          - `${{ env.VERSION_MAJOR }}.latest`
           - `latest`
         draft: false
         prerelease: false
+
+    - name: Update version file on main branch
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        echo "Configuring Git user..."
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+        echo "Checking out main branch to update version..."
+        git fetch origin main
+        git checkout main
+
+        INIT_PY_PATH="app/__init__.py"
+        VERSION_TO_SET="${{ env.VERSION }}"
+        
+        echo "Updating version in $INIT_PY_PATH on main to $VERSION_TO_SET..."
+        mkdir -p "$(dirname "$INIT_PY_PATH")"
+        echo "__version__ = \"$VERSION_TO_SET\"" > "$INIT_PY_PATH"
+        
+        # Check for changes and commit/push if any
+        if git diff --quiet "$INIT_PY_PATH"; then
+          echo "No version changes to commit to main."
+        else
+          echo "Committing and pushing version update to main..."
+          git add "$INIT_PY_PATH"
+          git commit -m "chore(version): Bump version in main to ${{ env.VERSION }} [skip ci]"
+          git push https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git main
+        fi
