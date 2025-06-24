@@ -20,13 +20,13 @@ from . import __version__
 logger = logging.getLogger("model-service")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-MODEL_URL     = os.getenv("MODEL_URL")
-CV_URL        = os.getenv("CV_URL")
-HOST  = os.getenv("SERVICE_HOST", "0.0.0.0")
-PORT  = int(os.getenv("PORT", "8080"))
+MODEL_URL = os.getenv("MODEL_URL")
+CV_URL = os.getenv("CV_URL")
+HOST = os.getenv("SERVICE_HOST", "0.0.0.0")
+PORT = int(os.getenv("PORT", "8080"))
 
-MODEL_FILE  = Path("model.joblib")
-CV_FILE     = Path("count_vectorizer.joblib")
+MODEL_FILE = Path("model.joblib")
+CV_FILE = Path("count_vectorizer.joblib")
 
 app = Flask(__name__)
 api = Api(
