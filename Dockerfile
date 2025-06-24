@@ -19,7 +19,9 @@ COPY app/ app/
 # Configurable at runtime
 ENV MODEL_URL=""
 ENV CV_URL=""
+ENV HOST="0.0.0.0"
 ENV PORT=8080
 
-EXPOSE 8080
-CMD ["python", "-m", "flask", "--app", "app.main", "run", "--host=0.0.0.0", "--port=8080"]
+EXPOSE ${PORT}
+
+ENTRYPOINT ["sh", "-c", "exec python -m flask --app app.main run --host=${HOST} --port=${PORT}"]

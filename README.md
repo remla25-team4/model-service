@@ -18,8 +18,11 @@ docker build -t model-service .
 docker run -p 8080:8080 \
   -e MODEL_URL="https://github.com/remla25-team4/model-training/releases/download/v1.0.5/naive_bayes.joblib" \
   -e CV_URL="https://github.com/remla25-team4/model-training/releases/download/v1.0.5/count_vectorizer.joblib" \
+  -e HOST=0.0.0.0 \
+  -e PORT=8080 \
   model-service
 ```
+If you would like to use a different model version, simply replace v1.0.5 with the desired version in the URL.
 ---
 
 ## Run Pre-built Image from GHCR
@@ -27,7 +30,7 @@ docker run -p 8080:8080 \
 ### 1. Pull the image
 
 ```bash
-docker pull ghcr.io/remla25-team4/model-service:1.0.11
+docker pull ghcr.io/remla25-team4/model-service:latest
 ```
 
 ### 2. Run the container
@@ -35,6 +38,7 @@ docker pull ghcr.io/remla25-team4/model-service:1.0.11
 ```bash
 docker run -p 8080:8080 -e MODEL_URL="https://github.com/remla25-team4/model-training/releases/download/v1.0.5/naive_bayes.joblib" -e CV_URL="https://github.com/remla25-team4/model-training/releases/download/v1.0.5/count_vectorizer.joblib" ghcr.io/remla25-team4/model-service:1.0.11
 ```
+If you would like to use a different model version, simply replace v1.0.5 with the desired version in the URL.
 
 ### 3. Access the service
 
