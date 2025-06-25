@@ -37,7 +37,8 @@ jobs:
         IMG_BASE="ghcr.io/${REPO}/${NAME}"
         
         # Use the tag without the 'v' prefix for the version tag
-        VERSION_TAG=${{ github.ref_name#v }}
+        FULL_TAG=${{ github.ref_name }}
+        VERSION_TAG=${FULL_TAG#v}
 
         docker buildx build --platform linux/amd64,linux/arm64 \
           -t "${IMG_BASE}:${VERSION_TAG}" \
@@ -49,7 +50,7 @@ jobs:
       with:
         tag_name: ${{ github.ref_name }}
         name: Release ${{ github.ref_name }} (model-service)
-        body: "Official release for model-service version **${{ github.ref_name }}**."
+        body: "Stable release for model-service version **${{ github.ref_name }}**."
         draft: false
         prerelease: false
 
