@@ -4,4 +4,4 @@ requests>=2.31.0
 joblib>=1.4.0
 scikit-learn>=1.4.0
 nltk>=3.8.1
-lib-ml @ git+https://github.com/remla25-team4/lib-ml.git@v0.1.0
+lib_ml @ https://github.com/remla25-team4/lib-ml/releases/download/v1.0.0/lib_ml-1.0.0-py3-none-any.whl
