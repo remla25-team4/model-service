@@ -1,12 +1,13 @@
-name: Generate Pre-release for model-service
+name: Create model-service Pre-release
 
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-  
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+
 jobs:
-  build_and_prerelease:
+  build_and_publish:
+    name: Build & Create GitHub Pre-release
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -14,16 +15,14 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout main branch code
+      - name: Checkout code at the tagged commit
         uses: actions/checkout@v4
-        with:
-          # ensures checking out the main branch
-          ref: main
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -31,59 +30,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      - name: Calculate pre-release version
-        id: calculate_version
-        run: |
-          # The base version is the stable tag that triggered the workflow
-          BASE_TAG=${{ github.ref_name }}
-          echo "Triggered by stable tag: $BASE_TAG"
-          
-          BASE_VERSION=${BASE_TAG#v} # Remove the 'v' prefix
-          IFS=. read MAJOR MINOR PATCH <<< "$BASE_VERSION"
-
-          # Increment the patch number for the new pre-release, as per the rubric
-          PATCH=$((PATCH + 1))
-          
-          # Use a timestamp for the pre-release identifier
-          TS=$(date +%Y%m%d%H%M%S)
-          PRE_RELEASE_VERSION="$MAJOR.$MINOR.$PATCH-pre.$TS"
-
-          echo "VERSION=$PRE_RELEASE_VERSION" >> $GITHUB_ENV
-          echo "Calculated pre-release version: v$PRE_RELEASE_VERSION"
-
-      - name: Tag the commit on main
-        run: |
-          git config --global user.name  "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Get the SHA of the commit we checked out from main
-          SHA=$(git rev-parse HEAD)
-          echo "Tagging commit $SHA on main with v${{ env.VERSION }}"
-          
-          git tag "v${{ env.VERSION }}" $SHA
-          git push origin "v${{ env.VERSION }}"
-
-      - name: Build & push Docker image (multi-arch)
+      - name: Build and push Docker image
         run: |
           REPO=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2 | tr '[:upper:]' '[:lower:]')
-          IMG="ghcr.io/${REPO}/${NAME}"
+          IMG_TAG="ghcr.io/${REPO}/${NAME}:${{ github.ref_name }}"
           
-          # Tag the image with the new pre-release version
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            -t "${IMG}:v${{ env.VERSION }}" \
+          docker buildx build --platform linux/amd64,linux/arm64 \
+            -t "${IMG_TAG}" \
             --push .
 
       - name: Create GitHub Pre-release
         uses: softprops/action-gh-release@v2
         with:
-          # Use the new pre-release tag we just created and pushed
-          tag_name: "v${{ env.VERSION }}"
-          name: Pre-release v${{ env.VERSION }} (model-service)
-          body: |
-            Automated **pre-release** for model-service version **v${{ env.VERSION }}**.
-            
-            This was triggered by the stable release of `${{ github.ref_name }}` and is built from the latest commit on the `main` branch.
-          draft: false
+          tag_name: ${{ github.ref_name }}
+          name: Pre-release ${{ github.ref_name }} (model-service)
+          body: "Automated pre-release of the model-service."
           prerelease: true
+          draft: false
