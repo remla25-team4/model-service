@@ -36,8 +36,10 @@ jobs:
           NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2 | tr '[:upper:]' '[:lower:]')
           IMG_TAG="ghcr.io/${REPO}/${NAME}:${{ github.ref_name }}"
           
+          BASE_TAG=${IMG_TAG#v} # without the v in front
+          
           docker buildx build --platform linux/amd64,linux/arm64 \
-            -t "${IMG_TAG}" \
+            -t "${BASE_TAG}" \
             --push .
 
       - name: Create GitHub Pre-release
